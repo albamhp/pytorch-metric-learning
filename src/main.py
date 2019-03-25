@@ -18,9 +18,9 @@ from torchvision.datasets import ImageFolder
 from sklearn.manifold import TSNE
 from matplotlib import pyplot as plt
 
-from dataloader import SiameseDataset
-from network import SiameseNet
-from loss import ContrastiveLoss
+from dataloader import SiameseDataset, TripletDataset
+from network import SiameseNet, TripletNet
+from loss import ContrastiveLoss, TripletLoss
 
 
 def parse_args():
@@ -53,15 +53,18 @@ def main():
                              std=[0.229, 0.224, 0.225])
     ])
 
-    train_set = SiameseDataset(args.dataset_dir, train_transform)
+    #train_set = SiameseDataset(args.dataset_dir, train_transform)
+    train_set = TripletDataset(args.dataset_dir, train_transform)
     train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True, num_workers=4)
     print(train_set)
 
-    model = SiameseNet(args.dims)
+    #model = SiameseNet(args.dims)
+    model = TripletNet(args.dims)
     if cuda:
         model = model.cuda()
 
-    criterion = ContrastiveLoss(margin=1.)
+    #criterion = ContrastiveLoss(margin=1.)
+    criterion = TripletLoss(margin=1.)
     optimizer = Adam(model.parameters())
     scheduler = StepLR(optimizer, 8, gamma=0.1, last_epoch=-1)
 
@@ -74,16 +77,22 @@ def main():
                   file=sys.stdout) as pbar:
 
             for batch_idx, data in pbar:
-                (sample1, sample2), target = data
+                #(sample1, sample2), target = data
+                (anchor, positive, negative), _ = data
                 if cuda:
-                    sample1 = sample1.cuda()
-                    sample2 = sample2.cuda()
-                    target = target.cuda()
+                #    sample1 = sample1.cuda()
+                #    sample2 = sample2.cuda()
+                #    target = target.cuda()
+                    anchor = anchor.cuda()
+                    positive = positive.cuda()
+                    negative = negative.cuda()
 
                 optimizer.zero_grad()
-                output1, output2 = model(sample1, sample2)
+                #output1, output2 = model(sample1, sample2)
+                output1, output2, output3 = model(anchor, positive, negative)
 
-                loss = criterion(output1, output2, target)
+                #loss = criterion(output1, output2, target)
+                loss = criterion(output1, output2, output3)
                 loss.backward()
                 optimizer.step()
 
@@ -98,6 +107,7 @@ def main():
     print('\nTraining stats:')
     print(df)
 
+    # TODO: use test dataset
     valid_set = ImageFolder(args.dataset_dir, transform=valid_transform)
     valid_loader = DataLoader(valid_set, batch_size=args.batch_size, shuffle=False, num_workers=4)
 

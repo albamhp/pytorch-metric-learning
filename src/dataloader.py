@@ -6,6 +6,9 @@ POSITIVE_NEGATIVE_RATIO = 0.1  # higher means more positives
 
 
 class SiameseDataset(ImageFolder):
+    """
+    For each sample creates randomly a positive or a negative pair.
+    """
 
     def __init__(self, root, transform):
         super().__init__(root, transform)
@@ -31,5 +34,34 @@ class SiameseDataset(ImageFolder):
 
         return (sample1, sample2), target
 
-    def __len__(self):
-        return super().__len__()
+
+class TripletDataset(ImageFolder):
+    """
+    For each sample (anchor) randomly chooses a positive and negative samples.
+    """
+
+    def __init__(self, root, transform):
+        super().__init__(root, transform)
+        print('Found {} images belonging to {} classes'.format(len(self), len(self.classes)))
+
+        self.target_to_idxs = {target: np.where(np.array(self.targets) == target)[0] for target in
+                               [self.class_to_idx[label] for label in self.classes]}
+        np.random.seed(42)
+
+    def __getitem__(self, index):
+        anchor_target = self.targets[index]
+        positive_target = anchor_target
+        negative_target = np.random.choice(list({self.class_to_idx[label] for label in self.classes} - {anchor_target}))
+
+        positive_index = np.random.choice(self.target_to_idxs[positive_target])
+        negative_index = np.random.choice(self.target_to_idxs[negative_target])
+
+        sample1 = self.loader(self.samples[index][0])
+        sample2 = self.loader(self.samples[positive_index][0])
+        sample3 = self.loader(self.samples[negative_index][0])
+        if self.transform is not None:
+            sample1 = self.transform(sample1)
+            sample2 = self.transform(sample2)
+            sample3 = self.transform(sample3)
+
+        return (sample1, sample2, sample3), []
