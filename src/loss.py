@@ -8,7 +8,7 @@ class ContrastiveLoss(nn.Module):
     Reference: http://yann.lecun.com/exdb/publis/pdf/hadsell-chopra-lecun-06.pdf
     """
 
-    def __init__(self, margin=2.0):
+    def __init__(self, margin):
         super().__init__()
         self.margin = margin
 

@@ -1,3 +1,5 @@
+import multiprocessing.dummy as mp
+
 from torch import nn
 from torchvision import models
 
@@ -23,8 +25,13 @@ class SiameseNet(nn.Module):
         self.embedding_net = EmbeddingNet(num_dims)
 
     def forward(self, x1, x2):
-        output1 = self.embedding_net(x1)
-        output2 = self.embedding_net(x2)
+
+        def worker(x):
+            return self.embedding_net(x)
+
+        with mp.Pool(processes=2) as p:
+            output1, output2 = p.map(worker, [x1, x2])
+
         return output1, output2
 
     def get_embedding(self, x):
@@ -39,9 +46,13 @@ class TripletNet(nn.Module):
         self.embedding_net = EmbeddingNet(num_dims)
 
     def forward(self, x1, x2, x3):
-        output1 = self.embedding_net(x1)
-        output2 = self.embedding_net(x2)
-        output3 = self.embedding_net(x3)
+
+        def worker(x):
+            return self.embedding_net(x)
+
+        with mp.Pool(processes=3) as p:
+            output1, output2, output3 = p.map(worker, [x1, x2, x3])
+
         return output1, output2, output3
 
     def get_embedding(self, x):
