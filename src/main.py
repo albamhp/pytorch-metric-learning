@@ -13,22 +13,23 @@ from torchvision.transforms import transforms
 from torch.utils.data import DataLoader
 from torch.optim import Adam
 from torch.optim.lr_scheduler import StepLR
-from torchvision.datasets import ImageFolder
 
 from sklearn.manifold import TSNE
 from matplotlib import pyplot as plt
 
-from dataloader import SiameseDataset, TripletDataset
-from network import SiameseNet, TripletNet
-from loss import ContrastiveLoss, TripletLoss
+from dataloader import Dataset, TripletDataset
+from network import TripletNet
+from loss import TripletLoss
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset_dir', type=str, required=True)
+    parser.add_argument('--min_images', type=int, default=5)
     parser.add_argument('--epochs', type=int, default=20)
-    parser.add_argument('--dims', type=int, default=32)
+    parser.add_argument('--input_size', type=int, default=224)
     parser.add_argument('--batch_size', type=int, default=32)
+    parser.add_argument('--dims', type=int, default=32)
     return parser.parse_args()
 
 
@@ -48,21 +49,15 @@ def train_epoch(train_loader, model, criterion, optimizer, cuda):
     losses = []
 
     for batch_idx, data in tqdm(enumerate(train_loader), total=len(train_loader), desc='Training', file=sys.stdout):
-        # (sample1, sample2), target = data
         (anchor, positive, negative), _ = data
         if cuda:
-            #    sample1 = sample1.cuda()
-            #    sample2 = sample2.cuda()
-            #    target = target.cuda()
             anchor = anchor.cuda()
             positive = positive.cuda()
             negative = negative.cuda()
 
         optimizer.zero_grad()
-        # output1, output2 = model(sample1, sample2)
         output1, output2, output3 = model(anchor, positive, negative)
 
-        # loss = criterion(output1, output2, target)
         loss = criterion(output1, output2, output3)
         loss.backward()
         optimizer.step()
@@ -127,36 +122,32 @@ def main():
         print('Device: {}'.format(torch.cuda.get_device_name(0)))
 
     train_transform = transforms.Compose([
-        transforms.Resize(224, interpolation=Image.BICUBIC),
+        transforms.Resize(args.input_size, interpolation=Image.BICUBIC),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                             std=[0.229, 0.224, 0.225])
+        transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5))
     ])
     valid_transform = transforms.Compose([
-        transforms.Resize(224, interpolation=Image.BICUBIC),
+        transforms.Resize(args.input_size, interpolation=Image.BICUBIC),
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                             std=[0.229, 0.224, 0.225])
+        transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5))
     ])
 
-    #train_set = SiameseDataset(args.dataset_dir, train_transform)
-    train_set = TripletDataset(args.dataset_dir, train_transform)
+    train_set = TripletDataset(args.dataset_dir, train_transform, min_images=args.min_images)
     train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True, num_workers=4)
     print(train_set)
 
     # TODO: use test dataset
-    test_set = ImageFolder(args.dataset_dir, transform=valid_transform)
+    test_set = Dataset(args.dataset_dir, transform=valid_transform, min_images=args.min_images)
     test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=4)
     print(test_set)
 
-    #model = SiameseNet(args.dims)
     model = TripletNet(args.dims)
     if cuda:
         model = model.cuda()
+    print(model)
 
-    #criterion = ContrastiveLoss(margin=1.)
-    criterion = TripletLoss(margin=1.)
+    criterion = TripletLoss(margin=1.0)
     optimizer = Adam(model.parameters(), lr=1e-4)
     scheduler = StepLR(optimizer, 8, gamma=0.1, last_epoch=-1)
 
