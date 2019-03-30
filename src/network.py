@@ -23,15 +23,10 @@ class SiameseNet(nn.Module):
         super().__init__()
 
         self.embedding_net = EmbeddingNet(num_dims)
+        self.pool = mp.Pool(processes=2)
 
     def forward(self, x1, x2):
-
-        def worker(x):
-            return self.embedding_net(x)
-
-        with mp.Pool(processes=2) as p:
-            output1, output2 = p.map(worker, [x1, x2])
-
+        output1, output2 = self.pool.map(self.get_embedding, [x1, x2])
         return output1, output2
 
     def get_embedding(self, x):
@@ -44,15 +39,10 @@ class TripletNet(nn.Module):
         super().__init__()
 
         self.embedding_net = EmbeddingNet(num_dims)
+        self.pool = mp.Pool(processes=3)
 
     def forward(self, x1, x2, x3):
-
-        def worker(x):
-            return self.embedding_net(x)
-
-        with mp.Pool(processes=3) as p:
-            output1, output2, output3 = p.map(worker, [x1, x2, x3])
-
+        output1, output2, output3 = self.pool.map(self.get_embedding, [x1, x2, x3])
         return output1, output2, output3
 
     def get_embedding(self, x):
