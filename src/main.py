@@ -25,7 +25,7 @@ from loss import OnlineTripletLoss
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset_dir', type=str, required=True)
-    parser.add_argument('--min_images', type=int, default=5)
+    parser.add_argument('--min_images', type=int, default=10)
     parser.add_argument('--epochs', type=int, default=20)
     parser.add_argument('--input_size', type=int, default=224)
     parser.add_argument('--batch_size', type=int, default=32)
