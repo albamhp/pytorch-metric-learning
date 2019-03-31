@@ -45,22 +45,10 @@ def fit(train_loader, test_loader, model, criterion, optimizer, scheduler, n_epo
             print('Epoch: {}/{}, Accuracy: {:.4f}'.format(epoch, n_epochs, accuracy))
 
 
-def predict(train_loader, predict_loader, model, cuda):
-    model.eval()
-
-    train_embeddings, train_targets = extract_embeddings(train_loader, model, cuda)
-    predict_embeddings, predict_targets = extract_embeddings(predict_loader, model, cuda)
-
-    knn = NearestNeighbors(n_neighbors=5, n_jobs=4).fit(train_embeddings, train_targets)
-    predicted = knn.kneighbors(predict_embeddings)
-
-    return predicted
-
-
 def train_epoch(train_loader, model, criterion, optimizer, cuda):
     model.train()
-    losses = []
 
+    losses = []
     for batch_idx, data in tqdm(enumerate(train_loader), total=len(train_loader), desc='Training', file=sys.stdout):
         samples, targets = data
         if cuda:
@@ -80,8 +68,6 @@ def train_epoch(train_loader, model, criterion, optimizer, cuda):
 
 
 def test_epoch(train_loader, test_loader, model, cuda):
-    model.eval()
-
     train_embeddings, train_targets = extract_embeddings(train_loader, model, cuda)
     test_embeddings, test_targets = extract_embeddings(test_loader, model, cuda)
 
@@ -93,6 +79,8 @@ def test_epoch(train_loader, test_loader, model, cuda):
 
 
 def extract_embeddings(loader, model, cuda):
+    model.eval()
+
     embeddings = []
     targets = []
     with torch.no_grad():
@@ -122,6 +110,16 @@ def plot_embeddings(dataset, embeddings, targets, title=''):
     plt.savefig('{}_embeddings.png'.format(title))
 
 
+def predict(train_loader, predict_loader, model, cuda):
+    train_embeddings, train_targets = extract_embeddings(train_loader, model, cuda)
+    predict_embeddings, predict_targets = extract_embeddings(predict_loader, model, cuda)
+
+    nbrs = NearestNeighbors(n_neighbors=5, n_jobs=4).fit(train_embeddings, train_targets)
+    predicted = nbrs.kneighbors(predict_embeddings)
+
+    return predicted
+
+
 def main():
     args = parse_args()
     print(vars(args))
@@ -136,7 +134,7 @@ def main():
         transforms.ToTensor(),
         transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5))
     ])
-    valid_transform = transforms.Compose([
+    test_transform = transforms.Compose([
         transforms.Resize(args.input_size, interpolation=Image.BICUBIC),
         transforms.ToTensor(),
         transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5))
@@ -149,15 +147,13 @@ def main():
 
     test_loader = None
     if os.path.exists(os.path.join(args.dataset_dir, 'test')):
-        test_set = Dataset(os.path.join(args.dataset_dir, 'test'), transform=valid_transform,
-                           min_images=args.min_images)
+        test_set = Dataset(os.path.join(args.dataset_dir, 'test'), transform=test_transform, min_images=args.min_images)
         test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=4)
         print(test_set)
 
     predict_loader = None
     if os.path.exists(os.path.join(args.dataset_dir, 'predict')):
-        predict_set = Dataset(os.path.join(args.dataset_dir, 'predict'), transform=valid_transform,
-                              min_images=1)
+        predict_set = Dataset(os.path.join(args.dataset_dir, 'predict'), transform=test_transform, min_images=1)
         predict_loader = DataLoader(predict_set, batch_size=1, shuffle=False, num_workers=4)
         print(predict_set)
 
@@ -171,6 +167,14 @@ def main():
     scheduler = StepLR(optimizer, 8, gamma=0.1, last_epoch=-1)
 
     fit(train_loader, test_loader, model, criterion, optimizer, scheduler, args.epochs, cuda)
+
+    train_embeddings, train_targets = extract_embeddings(train_loader, model, cuda)
+    plot_embeddings(train_loader.dataset, train_embeddings, train_targets, title='train')
+
+    if test_loader is not None:
+        test_embeddings, test_targets = extract_embeddings(test_loader, model, cuda)
+        plot_embeddings(test_loader.dataset, test_embeddings, test_targets, title='test')
+
     if predict_loader is not None:
         train_set_2 = Dataset(os.path.join(args.dataset_dir, 'train'), train_transform, min_images=1)
         train_batch_sampler_2 = BalancedBatchSampler(train_set.targets, n_classes=10, n_samples=1)
@@ -179,15 +183,8 @@ def main():
         _, predictions = predict(train_loader_2, predict_loader, model, cuda)
 
         for i, p in enumerate(predictions):
-            print(predict_set.samples[i])
-            print([train_set_2.samples[s] for s in p])
-
-    if test_loader is not None:
-        train_embeddings, train_targets = extract_embeddings(train_loader, model, cuda)
-        plot_embeddings(train_set, train_embeddings, train_targets, title='train')
-
-        test_embeddings, test_targets = extract_embeddings(test_loader, model, cuda)
-        plot_embeddings(test_set, test_embeddings, test_targets, title='test')
+            print(predict_loader.dataset.samples[i])
+            print([train_loader_2.dataset.samples[s] for s in p])
 
 
 if __name__ == '__main__':
