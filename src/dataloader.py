@@ -15,9 +15,9 @@ class Dataset(ImageFolder):
         print('Found {} images belonging to {} classes'.format(len(self), len(self.classes)))
 
     def _find_classes(self, dir):
-        classes = [d.name for d in os.scandir(dir) if d.is_dir() and len(os.listdir(d.path)) >= self.min_images]
-        classes.sort()
-        class_to_idx = {classes[i]: i for i in range(len(classes))}
+        classes, class_to_idx = super()._find_classes(dir)
+        classes = [cls for cls in classes if len(os.listdir(os.path.join(dir, cls))) >= self.min_images]
+        class_to_idx = {cls: idx for cls, idx in class_to_idx.items() if cls in classes}
         return classes, class_to_idx
 
 

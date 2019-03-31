@@ -1,10 +1,10 @@
+import os
 import sys
 import argparse
 
 import numpy as np
 from PIL import Image
-from sklearn.neighbors import NearestNeighbors
-from scipy import stats
+from sklearn.neighbors import KNeighborsClassifier
 from sklearn import metrics
 from tqdm import tqdm
 
@@ -40,7 +40,7 @@ def fit(train_loader, test_loader, model, criterion, optimizer, scheduler, n_epo
         train_loss = train_epoch(train_loader, model, criterion, optimizer, cuda)
         print('Epoch: {}/{}, Average train loss: {:.4f}'.format(epoch, n_epochs, train_loss))
 
-        accuracy = test_epoch(test_loader, model, cuda)
+        accuracy = test_epoch(train_loader, test_loader, model, cuda)
         print('Epoch: {}/{}, Accuracy: {:.4f}'.format(epoch, n_epochs, accuracy))
 
 
@@ -66,21 +66,15 @@ def train_epoch(train_loader, model, criterion, optimizer, cuda):
     return np.mean(losses)
 
 
-def test_epoch(test_loader, model, cuda):
+def test_epoch(train_loader, test_loader, model, cuda):
     model.eval()
 
-    embeddings, actual = extract_embeddings(test_loader, model, cuda)
+    train_embeddings, train_targets = extract_embeddings(train_loader, model, cuda)
+    test_embeddings, test_targets = extract_embeddings(test_loader, model, cuda)
 
-    nbrs = NearestNeighbors(n_neighbors=5, n_jobs=4).fit(embeddings)
-    distances, indices = nbrs.kneighbors(embeddings)
-    nearest = np.empty(shape=indices.shape)
-    for x in range(indices.shape[0]):
-        for y in range(indices.shape[1]):
-            nearest[x, y] = test_loader.dataset.targets[indices[x, y]]
-
-    # TODO: remove skipping first index when using test dataset
-    predicted, _ = stats.mode(nearest[:, 1:], axis=1)
-    accuracy = metrics.accuracy_score(actual, predicted)
+    knn = KNeighborsClassifier(n_neighbors=5, n_jobs=4).fit(train_embeddings, train_targets)
+    predicted = knn.predict(test_embeddings)
+    accuracy = metrics.accuracy_score(test_targets, predicted)
 
     return accuracy
 
@@ -96,9 +90,9 @@ def extract_embeddings(loader, model, cuda):
             output = model.get_embedding(sample)
 
             embeddings.append(output.cpu().numpy())
-            targets.append(target.reshape([-1, 1]))
+            targets.append(target)
     embeddings = np.vstack(embeddings)
-    targets = np.vstack(targets)
+    targets = np.concatenate(targets)
 
     return embeddings, targets
 
@@ -133,13 +127,12 @@ def main():
         transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5))
     ])
 
-    train_set = Dataset(args.dataset_dir, train_transform, min_images=args.min_images)
+    train_set = Dataset(os.path.join(args.dataset_dir, 'train'), train_transform, min_images=args.min_images)
     train_batch_sampler = BalancedBatchSampler(train_set.targets, n_classes=10, n_samples=10)
     train_loader = DataLoader(train_set, batch_sampler=train_batch_sampler, num_workers=4)
     print(train_set)
 
-    # TODO: use test dataset
-    test_set = Dataset(args.dataset_dir, transform=valid_transform, min_images=args.min_images)
+    test_set = Dataset(os.path.join(args.dataset_dir, 'test'), transform=valid_transform, min_images=args.min_images)
     test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=4)
     print(test_set)
 
