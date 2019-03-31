@@ -16,6 +16,9 @@ class EmbeddingNet(nn.Module):
     def forward(self, x):
         return self.model(x)
 
+    def get_embedding(self, x):
+        return self.forward(x)
+
 
 class SiameseNet(nn.Module):
 
