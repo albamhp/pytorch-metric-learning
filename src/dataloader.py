@@ -92,6 +92,7 @@ class BalancedBatchSampler(BatchSampler):
         self.batch_size = self.n_classes * self.n_samples
 
         self.target_to_idxs = {target: np.where(np.array(self.targets) == target)[0] for target in self.classes}
+        np.random.seed(42)
 
     def __iter__(self):
         count = 0

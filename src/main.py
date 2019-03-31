@@ -115,6 +115,7 @@ def plot_embeddings(dataset, embeddings, targets):
 
 def main():
     args = parse_args()
+    print(vars(args))
 
     cuda = torch.cuda.is_available()
     if cuda:
