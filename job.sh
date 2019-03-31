@@ -9,4 +9,4 @@
 #SBATCH --output ../logs/%x_%j.out
 
 source /home/grupo06/venv/bin/activate
-python src/main.py --dataset-dir datasets/tsinghua_split --min-images 20
+python src/main.py datasets/tsinghua_split --min-images 20
