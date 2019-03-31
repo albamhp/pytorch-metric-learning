@@ -99,6 +99,7 @@ def extract_embeddings(loader, model, cuda):
 
 def plot_embeddings(dataset, embeddings, targets, title=''):
     embeddings = TSNE(n_components=2).fit_transform(embeddings)
+    plt.figure(figsize=(10, 10))
     for cls in np.random.choice(dataset.classes, 10):
         i = dataset.class_to_idx[cls]
         inds = np.where(targets == i)[0]
