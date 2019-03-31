@@ -4,7 +4,7 @@ import argparse
 
 import numpy as np
 from PIL import Image
-from sklearn.neighbors import KNeighborsClassifier
+from sklearn.neighbors import KNeighborsClassifier, NearestNeighbors
 from sklearn import metrics
 from tqdm import tqdm
 
@@ -24,11 +24,11 @@ from loss import OnlineTripletLoss
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset_dir', type=str, required=True)
-    parser.add_argument('--min_images', type=int, default=5)
+    parser.add_argument('dataset_dir', type=str)
+    parser.add_argument('--min-images', type=int, default=5)
     parser.add_argument('--epochs', type=int, default=20)
-    parser.add_argument('--input_size', type=int, default=224)
-    parser.add_argument('--batch_size', type=int, default=32)
+    parser.add_argument('--input-size', type=int, default=224)
+    parser.add_argument('--batch-size', type=int, default=32)
     parser.add_argument('--dims', type=int, default=32)
     return parser.parse_args()
 
@@ -40,8 +40,21 @@ def fit(train_loader, test_loader, model, criterion, optimizer, scheduler, n_epo
         train_loss = train_epoch(train_loader, model, criterion, optimizer, cuda)
         print('Epoch: {}/{}, Average train loss: {:.4f}'.format(epoch, n_epochs, train_loss))
 
-        accuracy = test_epoch(train_loader, test_loader, model, cuda)
-        print('Epoch: {}/{}, Accuracy: {:.4f}'.format(epoch, n_epochs, accuracy))
+        if test_loader is not None:
+            accuracy = test_epoch(train_loader, test_loader, model, cuda)
+            print('Epoch: {}/{}, Accuracy: {:.4f}'.format(epoch, n_epochs, accuracy))
+
+
+def predict(train_loader, predict_loader, model, cuda):
+    model.eval()
+
+    train_embeddings, train_targets = extract_embeddings(train_loader, model, cuda)
+    predict_embeddings, predict_targets = extract_embeddings(predict_loader, model, cuda)
+
+    knn = NearestNeighbors(n_neighbors=5, n_jobs=4).fit(train_embeddings, train_targets)
+    predicted = knn.kneighbors(predict_embeddings)
+
+    return predicted
 
 
 def train_epoch(train_loader, model, criterion, optimizer, cuda):
@@ -128,13 +141,23 @@ def main():
     ])
 
     train_set = Dataset(os.path.join(args.dataset_dir, 'train'), train_transform, min_images=args.min_images)
-    train_batch_sampler = BalancedBatchSampler(train_set.targets, n_classes=10, n_samples=10)
+    train_batch_sampler = BalancedBatchSampler(train_set.targets, n_classes=10, n_samples=args.min_images)
     train_loader = DataLoader(train_set, batch_sampler=train_batch_sampler, num_workers=4)
     print(train_set)
 
-    test_set = Dataset(os.path.join(args.dataset_dir, 'test'), transform=valid_transform, min_images=args.min_images)
-    test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=4)
-    print(test_set)
+    test_loader = None
+    if os.path.exists(os.path.join(args.dataset_dir, 'test')):
+        test_set = Dataset(os.path.join(args.dataset_dir, 'test'), transform=valid_transform,
+                           min_images=args.min_images)
+        test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=4)
+        print(test_set)
+
+    predict_loader = None
+    if os.path.exists(os.path.join(args.dataset_dir, 'predict')):
+        predict_set = Dataset(os.path.join(args.dataset_dir, 'predict'), transform=valid_transform,
+                              min_images=1)
+        predict_loader = DataLoader(predict_set, batch_size=1, shuffle=False, num_workers=4)
+        print(predict_set)
 
     model = EmbeddingNet(args.dims)
     if cuda:
@@ -146,9 +169,20 @@ def main():
     scheduler = StepLR(optimizer, 8, gamma=0.1, last_epoch=-1)
 
     fit(train_loader, test_loader, model, criterion, optimizer, scheduler, args.epochs, cuda)
+    if predict_loader is not None:
+        train_set_2 = Dataset(os.path.join(args.dataset_dir, 'train'), train_transform, min_images=1)
+        train_batch_sampler_2 = BalancedBatchSampler(train_set.targets, n_classes=10, n_samples=1)
+        train_loader_2 = DataLoader(train_set_2, batch_sampler=train_batch_sampler_2, num_workers=4)
 
-    embeddings, targets = extract_embeddings(test_loader, model, cuda)
-    plot_embeddings(test_set, embeddings, targets)
+        _, predictions = predict(train_loader_2, predict_loader, model, cuda)
+
+        for i, p in enumerate(predictions):
+            print(predict_set.samples[i])
+            print([train_set_2.samples[s] for s in p])
+
+    if test_loader is not None:
+        embeddings, targets = extract_embeddings(test_loader, model, cuda)
+        plot_embeddings(test_set, embeddings, targets)
 
 
 if __name__ == '__main__':
