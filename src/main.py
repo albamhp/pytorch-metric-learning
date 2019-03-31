@@ -25,7 +25,7 @@ from loss import OnlineTripletLoss
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('dataset_dir', type=str)
-    parser.add_argument('--min-images', type=int, default=5)
+    parser.add_argument('--min-images', type=int, default=10)
     parser.add_argument('--epochs', type=int, default=20)
     parser.add_argument('--input-size', type=int, default=224)
     parser.add_argument('--batch-size', type=int, default=32)
@@ -110,14 +110,15 @@ def extract_embeddings(loader, model, cuda):
     return embeddings, targets
 
 
-def plot_embeddings(dataset, embeddings, targets):
+def plot_embeddings(dataset, embeddings, targets, title=''):
     embeddings = TSNE(n_components=2).fit_transform(embeddings)
     for cls in np.random.choice(dataset.classes, 10):
         i = dataset.class_to_idx[cls]
         inds = np.where(targets == i)[0]
         plt.scatter(embeddings[inds, 0], embeddings[inds, 1], alpha=0.5)
     plt.legend(dataset.classes)
-    plt.savefig('embeddings.png')
+    plt.title(title)
+    plt.savefig('{}_embeddings.png'.format(title))
 
 
 def main():
@@ -181,8 +182,11 @@ def main():
             print([train_set_2.samples[s] for s in p])
 
     if test_loader is not None:
-        embeddings, targets = extract_embeddings(test_loader, model, cuda)
-        plot_embeddings(test_set, embeddings, targets)
+        train_embeddings, train_targets = extract_embeddings(train_loader, model, cuda)
+        plot_embeddings(train_set, train_embeddings, train_targets, title='train')
+
+        test_embeddings, test_targets = extract_embeddings(test_loader, model, cuda)
+        plot_embeddings(test_set, test_embeddings, test_targets, title='test')
 
 
 if __name__ == '__main__':
