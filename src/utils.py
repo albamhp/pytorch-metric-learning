@@ -1,10 +1,7 @@
-def get_pair_permutation(num_items: int, n: int):
-    running_count = num_items - 1
-    running_n = n
-    val_0 = 0
-    while running_n > running_count:
-        running_n -= running_count
-        running_count -= 1
-        val_0 += 1
+import torch
 
-    return val_0, val_0 + running_n
+
+def pairwise_distances(vectors):
+    return -2 * vectors.mm(torch.t(vectors)) + \
+           vectors.pow(2).sum(dim=1).view(1, -1) + \
+           vectors.pow(2).sum(dim=1).view(-1, 1)

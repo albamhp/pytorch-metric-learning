@@ -17,9 +17,9 @@ from torch.optim.lr_scheduler import StepLR
 from sklearn.manifold import TSNE
 from matplotlib import pyplot as plt
 
-from dataloader import Dataset, TripletDataset
-from network import TripletNet
-from loss import TripletLoss
+from dataloader import Dataset, BalancedBatchSampler
+from network import EmbeddingNet
+from loss import OnlineTripletLoss
 
 
 def parse_args():
@@ -49,16 +49,15 @@ def train_epoch(train_loader, model, criterion, optimizer, cuda):
     losses = []
 
     for batch_idx, data in tqdm(enumerate(train_loader), total=len(train_loader), desc='Training', file=sys.stdout):
-        (anchor, positive, negative), _ = data
+        samples, targets = data
         if cuda:
-            anchor = anchor.cuda()
-            positive = positive.cuda()
-            negative = negative.cuda()
+            samples = samples.cuda()
+            targets = targets.cuda()
 
         optimizer.zero_grad()
-        output1, output2, output3 = model(anchor, positive, negative)
+        outputs = model(samples)
 
-        loss = criterion(output1, output2, output3)
+        loss = criterion(outputs, targets)
         loss.backward()
         optimizer.step()
 
@@ -133,8 +132,9 @@ def main():
         transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5))
     ])
 
-    train_set = TripletDataset(args.dataset_dir, train_transform, min_images=args.min_images)
-    train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True, num_workers=4)
+    train_set = Dataset(args.dataset_dir, train_transform, min_images=args.min_images)
+    train_batch_sampler = BalancedBatchSampler(train_set.targets, n_classes=10, n_samples=10)
+    train_loader = DataLoader(train_set, batch_sampler=train_batch_sampler, num_workers=4)
     print(train_set)
 
     # TODO: use test dataset
@@ -142,12 +142,12 @@ def main():
     test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=4)
     print(test_set)
 
-    model = TripletNet(args.dims)
+    model = EmbeddingNet(args.dims)
     if cuda:
         model = model.cuda()
     print(model)
 
-    criterion = TripletLoss(margin=1.0)
+    criterion = OnlineTripletLoss(margin=1.0)
     optimizer = Adam(model.parameters(), lr=1e-4)
     scheduler = StepLR(optimizer, 8, gamma=0.1, last_epoch=-1)
 

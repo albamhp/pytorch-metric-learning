@@ -9,4 +9,4 @@
 #SBATCH --output logs/%x_%j.out
 
 source /home/grupo06/venv/bin/activate
-python src/main.py --dataset_dir datasets/tsinghua_resized --min_images 20 --batch_size 128 --dims 64
+python src/main.py --dataset_dir datasets/tsinghua_resized --min_images 20
