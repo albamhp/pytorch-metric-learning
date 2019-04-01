@@ -28,7 +28,7 @@ def parse_args():
     parser.add_argument('--min-images', type=int, default=10)
     parser.add_argument('--epochs', type=int, default=20)
     parser.add_argument('--input-size', type=int, default=224)
-    parser.add_argument('--batch-size', type=int, default=32)
+    parser.add_argument('--batch-size', type=int, default=128)
     parser.add_argument('--dims', type=int, default=32)
     return parser.parse_args()
 
@@ -141,7 +141,7 @@ def main():
     ])
 
     train_set = Dataset(os.path.join(args.dataset_dir, 'train'), train_transform, min_images=args.min_images)
-    train_batch_sampler = BalancedBatchSampler(train_set.targets, n_classes=10, n_samples=args.min_images)
+    train_batch_sampler = BalancedBatchSampler(train_set.targets, n_classes=10, n_samples=10)
     train_loader = DataLoader(train_set, batch_sampler=train_batch_sampler, num_workers=4)
     print(train_set)
 
