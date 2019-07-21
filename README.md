@@ -1,1 +1,1 @@
-# deep-metric-learning
+# pytorch-metric-learning
